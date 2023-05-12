@@ -1,0 +1,138 @@
+#################################################################################################################################132
+#
+#	make.rules
+#
+#   implicits, plus rules for making libraries defined in make.defines
+#
+#################################################################################################################################132
+
+clean :
+ifdef LIBDIRS
+	$(foreach libdir,$(LIBDIRS),$(MAKE) -C $(libdir) clean && ) true
+endif
+ifdef SODIRS
+	$(foreach sodir,$(SODIRS),$(MAKE) -C $(sodir) clean && ) true
+endif
+ifdef BINARYDIRS
+	$(foreach binarydir,$(BINARYDIRS),$(MAKE) -C $(binarydir) clean && ) true
+endif
+ifdef SUBMODULEDIRS
+	$(foreach submoduledir,$(SUBMODULEDIRS),$(MAKE) -C $(submoduledir) clean && ) true
+endif
+	@rm -f *.log ./obj/*.o ./obj/*.E ./obj/*.S ./obj/*.d ./lib/*.a ./lib/*.so $(BINARY)
+	@if [ -d obj ]; then rmdir obj; fi
+	@if [ -d lib ]; then rmdir lib; fi
+	@if [ -d bin ]; then rmdir bin; fi
+	@if [ -d install-JACK ]; then rm -rf install-JACK; fi
+
+opensource-clean:
+	$(foreach opensourcedir,$(OPENSOURCEDIRS),$(MAKE) -C $(opensourcedir) -f Makefile-JACK clean && ) true
+	$(foreach submoduledir,$(SUBMODULEDIRS),$(MAKE) -C $(submoduledir) opensource-clean && ) true
+
+ifdef SO
+$(SO) : $(foreach libdir,$(LIBDIRS),$(libdir)/lib/*.a)
+	@echo "###############################################################################"
+	@echo -n "### SHARED OBJECT : "
+	$(LDXX) $(LDFLAGS) -shared $(foreach libdir,$(LIBDIRS),$(libdir)/obj/*.o) -Wl,--version-script=version $(SYSLIBS) -o $(SO)
+endif
+
+ifdef LIB
+$(LIB) : $(CCSOURCES:./src/%.cc=./obj/%.o) $(CPPSOURCES:./src/%.cpp=./obj/%.o) $(CSOURCES:./src/%.c=./obj/%.o) 
+	@if [ ! -d lib ]; then mkdir lib >/dev/null 2>&1; fi
+	@echo "###############################################################################"
+	@echo -n "### ARCHIVE : "
+	$(AR) -rv $@ $^
+	$(RANLIB) $@
+endif
+
+ifdef BINARY
+$(BINARY) : $(CCSOURCES:./src/%.cc=./obj/%.o) $(CPPSOURCES:./src/%.cpp=./obj/%.o) $(CSOURCES:./src/%.c=./obj/%.o) $(foreach libdir,$(LIBDIRS),$(libdir)/lib/*.a) $(foreach sodir,$(SODIRS),$(sodir)/lib/*.so)
+	@if [ ! -d bin ]; then mkdir bin >/dev/null 2>&1; fi
+	@echo "###############################################################################"
+	@echo -n "### LINK    : "
+	$(LDXX) $(LDFLAGS) -o $@ $^ $(SYSLIBS)
+endif
+
+binaries :
+	$(foreach binarydir,$(BINARYDIRS),$(MAKE) -C $(binarydir) $(MAKECMDGOALS) && ) true
+
+libs :
+	$(foreach libdir,$(LIBDIRS),$(MAKE) -C $(libdir) $(MAKECMDGOALS) && ) true
+
+sos :
+	$(foreach sodir,$(SODIRS),$(MAKE) -C $(sodir) $(MAKECMDGOALS) && ) true
+
+opensource :
+	$(foreach opensourcedir,$(OPENSOURCEDIRS),$(MAKE) -C $(opensourcedir) -f Makefile-JACK && ) true
+	$(foreach submoduledir,$(SUBMODULEDIRS),$(MAKE) -C $(submoduledir) opensource && ) true
+
+submodules :
+	$(foreach submoduledir,$(SUBMODULEDIRS),$(MAKE) -C $(submoduledir) $(MAKECMDGOALS) && ) true
+
+# implicits
+# STANDARD C++ COMPILE
+./obj/%.o : ./src/%.cc ./obj/%.d
+	@echo "###############################################################################"
+	@echo -n "### COMPILE : "
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+./obj/%.o : ./src/%.cpp ./obj/%.d
+	@echo "###############################################################################"
+	@echo -n "### COMPILE : "
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+# STANDARD C++ AUTODEPEND GENERATION
+./obj/%.d : ./src/%.cc
+	@if [ ! -d obj ]; then mkdir obj >/dev/null 2>&1; fi
+	@echo "###############################################################################"
+	@echo -n "### DEPEND   : "
+	$(DEPCXX) $(CPPFLAGS) $(CXXFLAGS) -c -M $< | $(SED) "s/^.*:/ .\/obj\/$*.o .\/obj\/$*.d : /g" > ./obj/$*.d
+./obj/%.d : ./src/%.cpp
+	@if [ ! -d obj ]; then mkdir obj >/dev/null 2>&1; fi
+	@echo "###############################################################################"
+	@echo -n "### DEPEND   : "
+	$(DEPCXX) $(CPPFLAGS) $(CXXFLAGS) -c -M $< | $(SED) "s/^.*:/ .\/obj\/$*.o .\/obj\/$*.d : /g" > ./obj/$*.d
+
+# STANDARD C++ PREPROCESSOR OUTPUT
+./obj/%.E : ./src/%.cc ./obj/%.d
+	@echo -n "### PREPROCESS : "
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -E $< -o $@
+./obj/%.E : ./src/%.cpp ./obj/%.d
+	@echo -n "### PREPROCESS : "
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -E $< -o $@
+
+# STANDARD C++ ASSEMBLER OUTPUT
+./obj/%.S : ./src/%.cc ./obj/%.d
+	@echo -n "### PREPROCESS : "
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -S $< -o $@
+./obj/%.S : ./src/%.cpp ./obj/%.d
+	@echo -n "### PREPROCESS : "
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -S $< -o $@
+
+# STANDARD C COMPILE
+./obj/%.o : ./src/%.c ./obj/%.d
+	@echo "###############################################################################"
+	@echo -n "### COMPILE : "
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+# STANDARD C AUTODEPEND GENERATION
+./obj/%.d : ./src/%.c
+	@if [ ! -d obj ]; then mkdir obj >/dev/null 2>&1; fi
+	@echo "###############################################################################"
+	@echo -n "### DEPEND   : "
+	$(DEPCC) $(CPPFLAGS) $(CFLAGS) -c -M $< | $(SED) "s/^.*:/ .\/obj\/$*.o .\/obj\/$*.d : /g" > ./obj/$*.d
+
+# STANDARD C PREPROCESSOR OUTPUT
+./obj/%.E : ./src/%.c ./obj/%.d
+	@echo -n "### PREPROCESS : "
+	$(CC) $(CPPFLAGS) $(CFLAGS) -E $< -o $@
+
+# STANDARD C ASSEMBLER OUTPUT
+./obj/%.S : ./src/%.c ./obj/%.d
+	@echo -n "### PREPROCESS : "
+	$(CC) $(CPPFLAGS) $(CFLAGS) -S $< -o $@
+
+ifneq ($(MAKECMDGOALS),clean)
+-include $(CSOURCES:./src/%.c=./obj/%.d)
+-include $(CCSOURCES:./src/%.cc=./obj/%.d)
+-include $(CPPSOURCES:./src/%.cpp=./obj/%.d)
+endif
